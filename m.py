@@ -2,9 +2,10 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import sqlite3
-import multiprocessing
-import threading
+from multiprocessing import Value, Pool, Manager
 import os
+import time
+import numpy as np
 
 class Breed:
     code: str
@@ -113,7 +114,7 @@ def get_breeder_details(breeder: Breeder) -> Breeder:
     url = f"https://www.enci.it/umbraco/enci/AllevatoriApi/TakeAllevatore?idAffisso={breeder.id}"
     payload = {}
     headers = {}
-    response = requests.request("GET", url, headers=headers, data=payload, timeout=15)
+    response = requests.request("GET", url, headers=headers, data=payload, timeout=10)
     breeder_data = json.loads(response.text)
     for current_member in breeder_data["Soci"]:
         member: Member = Member(description=current_member["DesAssociato"],
@@ -147,7 +148,6 @@ def get_breeders(area:Area) -> list[Breeder]:
                                    id=current_breeder["IdAffisso"], 
                                    breeds={breed_code:Breed(code=breed_code) for breed_code in current_breeder["Razze"]})
         if breeder not in breeders:
-            breeder = get_breeder_details(breeder)
             breeders.append(breeder)
             print(f"\t-Breeder ({breeder.id}){breeder.title} added.")
     return breeders
@@ -172,13 +172,51 @@ def scrape_area(area: Area) -> Area:
     print(f"Area ({area.region}){area.title} scraped.")
     return area
 
+def request_breeder_details(breeder: Breeder, total_breeders: int, completed_breeders: Value, wait_time: float) -> Breeder:
+    time.sleep(wait_time)
+    completed: bool = False
+    while not completed:
+        try:
+            breeder = get_breeder_details(breeder)
+            completed = True
+        except requests.exceptions.Timeout:
+            time.sleep(np.random.uniform(7.3,11.48))
+    completed_breeders.value += 1
+    percentage = round((float(completed_breeders.value)/float(total_breeders))*100.0, 4)
+    print(f"({completed_breeders.value}/{total_breeders}) - {percentage}%")
+    return breeder
+
 if __name__ == "__main__":
     db = Database()
     areas: list[Area] = get_areas()
-    pool = multiprocessing.Pool(os.cpu_count())
+    pool = Pool(os.cpu_count())
     pooled_areas = pool.starmap(scrape_area, [(area,) for area in areas])
+    x = {}
+    for area in pooled_areas:
+        for breeder in area.breeders:
+            x[breeder.id] = breeder
+    all_breeders: list[Breeder] = x.values()
+    print("All breeders scraped.")
+    print(f"Starting to retrieve breeder details for {len(all_breeders)} breeders.")
+    total_breeder_count = len(all_breeders)
+    manager: Manager = Manager()
+    completed_processes = manager.Value("i", 0)
+    pool = Pool(os.cpu_count())
+    pooled_breeders = pool.starmap(request_breeder_details, [(breeder, total_breeder_count, completed_processes, np.random.uniform(0.03,0.43)) for breeder in all_breeders])
+    print("All breeders details retrieved.")
+    finalised_breeders: dict = {}
+    for breeder in pooled_breeders:
+        finalised_breeders[breeder.id] = breeder
+    print("Starting to add all breeders details to breeders.")
+    for area in pooled_areas:
+        for breeder in area.breeders:
+            if breeder.id in finalised_breeders:
+                breeder = finalised_breeders[breeder.id]
+    print("All breeders details added to breeders.")
+    print("Starting to add all breeders to database.")
     for area in pooled_areas:
         add_to_database(db, area)
         print(f"Area ({area.region}){area.title} added to database.")
+    print("All breeders added to database.")
 
     
