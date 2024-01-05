@@ -2,10 +2,25 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import sqlite3
-from multiprocessing import Value, Pool, Manager
+from multiprocessing import Value, Pool, Manager, Lock
 import os
 import time
 import numpy as np
+from ctypes import c_int, c_buffer
+
+class Counter(object):
+    def __init__(self, manager: Manager, initval=0):
+        self.val = manager.Value(c_int, initval)
+        self.lock = manager.Lock()
+    def increment(self):
+        with self.lock:
+            self.val.value += 1
+    def decrement(self):
+        with self.lock:
+            self.val.value -= 1
+    @property
+    def value(self):
+        return self.val.value
 
 class Breed:
     code: str
@@ -16,6 +31,11 @@ class Breed:
     group_description: str
     def __init__(self, code:str):
         self.code = code
+        self.id = None
+        self.last_litter = None
+        self.description = None
+        self.group_code = None
+        self.group_description = None
     def __str__(self):
         return f"{self.code}"
     def __repr__(self):
@@ -63,6 +83,9 @@ class Breeder:
         return f"({self.title}){self.owner}-{self.breeds}-{self.id}"
     def __repr__(self):
         return Breeder.__str__(self)
+    @staticmethod
+    def get_key(obj)->int:
+        return int(obj.id)
 
 class Area:
     title: str
@@ -130,7 +153,6 @@ def get_breeder_details(breeder: Breeder) -> Breeder:
         breeder.breeds[current_breed["CodRazza"]].description = current_breed["DesRazza"]
         breeder.breeds[current_breed["CodRazza"]].group_code = current_breed["CodGruppo"]
         breeder.breeds[current_breed["CodRazza"]].group_description = current_breed["DesGruppo"]
-    print(f"\t\t•Breeder ({breeder.id}){breeder.title} details retrieved.")
     return breeder
 
 def get_breeders(area:Area) -> list[Breeder]:
@@ -139,7 +161,7 @@ def get_breeders(area:Area) -> list[Breeder]:
     headers = {
     'Content-Type': 'application/json;charset=utf-8'
     }
-    response = requests.request("POST", url, headers=headers, data=payload)
+    response: requests.Response = requests.request("POST", url, headers=headers, data=payload)
     breeder_data = json.loads(response.text)
     breeders: list[Breeder] = []
     for current_breeder in breeder_data:
@@ -157,7 +179,7 @@ def add_to_database(db: Database, area: Area) -> bool:
     for breeder in area.breeders:
         db.cursor.execute("INSERT OR IGNORE INTO breeders (title, owner, id) VALUES (?, ?, ?)", (breeder.title, breeder.owner, breeder.id))
         for breed_code in breeder.breeds:
-            breed = breeder.breeds[breed_code]
+            breed: Breed = breeder.breeds[breed_code]
             db.cursor.execute("INSERT OR IGNORE INTO breeds (code, id, last_litter, description, group_code, group_description) VALUES (?, ?, ?, ?, ?, ?)", (breed.code, breed.id, breed.last_litter, breed.description, breed.group_code, breed.group_description))
             db.cursor.execute("INSERT OR IGNORE INTO breeders_breeds (breeder_id, breed_code) VALUES (?, ?)", (breeder.id, breed.code))
         for member in breeder.members:
@@ -168,41 +190,48 @@ def add_to_database(db: Database, area: Area) -> bool:
     return True
 
 def scrape_area(area: Area) -> Area:
-    area.breeders = get_breeders(area)
+    area.breeders: list[Breeder] = get_breeders(area)
     print(f"Area ({area.region}){area.title} scraped.")
     return area
 
-def request_breeder_details(breeder: Breeder, total_breeders: int, completed_breeders: Value, wait_time: float) -> Breeder:
+def request_breeder_details(breeder: Breeder, total_breeders: int, completed_breeders: Counter, paused_process_count: Counter,wait_time: float) -> Breeder:
     time.sleep(wait_time)
     completed: bool = False
     while not completed:
         try:
+            if paused_process_count.value > 10:
+                time.sleep(5.0)
             breeder = get_breeder_details(breeder)
             completed = True
-        except requests.exceptions.Timeout:
+        except Exception as e:
+            print(f"({breeder.id})Error: {e} - Retrying in 7.3-11.48 seconds.")
+            paused_process_count.increment()
             time.sleep(np.random.uniform(7.3,11.48))
-    completed_breeders.value += 1
+            paused_process_count.decrement()
+    completed_breeders.increment()
     percentage = round((float(completed_breeders.value)/float(total_breeders))*100.0, 4)
     print(f"({completed_breeders.value}/{total_breeders}) - {percentage}%")
     return breeder
 
 if __name__ == "__main__":
-    db = Database()
+    db: Database = Database()
     areas: list[Area] = get_areas()
-    pool = Pool(os.cpu_count())
+    pool: Pool = Pool(os.cpu_count())
     pooled_areas = pool.starmap(scrape_area, [(area,) for area in areas])
-    x = {}
+    x: dict = {}
     for area in pooled_areas:
         for breeder in area.breeders:
             x[breeder.id] = breeder
-    all_breeders: list[Breeder] = x.values()
+    all_breeders: list[Breeder] = list(x.values())
+    all_breeders.sort(key=Breeder.get_key)
     print("All breeders scraped.")
     print(f"Starting to retrieve breeder details for {len(all_breeders)} breeders.")
     total_breeder_count = len(all_breeders)
     manager: Manager = Manager()
-    completed_processes = manager.Value("i", 0)
-    pool = Pool(os.cpu_count())
-    pooled_breeders = pool.starmap(request_breeder_details, [(breeder, total_breeder_count, completed_processes, np.random.uniform(0.03,0.43)) for breeder in all_breeders])
+    completed_processes = Counter(manager,0)
+    paused_process_count = Counter(manager,0)
+    pool: Pool = Pool(os.cpu_count())
+    pooled_breeders = pool.starmap(request_breeder_details, [(breeder, total_breeder_count, completed_processes, paused_process_count,np.random.uniform(0.03,0.43)) for breeder in all_breeders])
     print("All breeders details retrieved.")
     finalised_breeders: dict = {}
     for breeder in pooled_breeders:
@@ -213,6 +242,7 @@ if __name__ == "__main__":
             if breeder.id in finalised_breeders:
                 breeder = finalised_breeders[breeder.id]
     print("All breeders details added to breeders.")
+    print(f"{completed_processes.value} breeders completed / {total_breeder_count} breeders total.")
     print("Starting to add all breeders to database.")
     for area in pooled_areas:
         add_to_database(db, area)
