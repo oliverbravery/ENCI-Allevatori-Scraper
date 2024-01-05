@@ -37,7 +37,7 @@ class Breed:
         self.group_code = None
         self.group_description = None
     def __str__(self):
-        return f"{self.code}"
+        return f"{self.code}-{self.id}-{self.last_litter}-{self.description}-{self.group_code}-{self.group_description}"
     def __repr__(self):
         return Breed.__str__(self)
     
@@ -148,11 +148,12 @@ def get_breeder_details(breeder: Breeder) -> Breeder:
         if member not in breeder.members:
             breeder.members.append(member)
     for current_breed in breeder_data["Razze"]:
-        breeder.breeds[current_breed["CodRazza"]].id = current_breed["IdUmb"]
-        breeder.breeds[current_breed["CodRazza"]].last_litter = current_breed["UltimaCucciolata"]
-        breeder.breeds[current_breed["CodRazza"]].description = current_breed["DesRazza"]
-        breeder.breeds[current_breed["CodRazza"]].group_code = current_breed["CodGruppo"]
-        breeder.breeds[current_breed["CodRazza"]].group_description = current_breed["DesGruppo"]
+        storeed_breed: Breed = breeder.breeds[current_breed["CodRazza"]]
+        storeed_breed.id = current_breed["IdUmb"]
+        storeed_breed.last_litter = current_breed["UltimaCucciolata"]
+        storeed_breed.description = current_breed["DesRazza"]
+        storeed_breed.group_code = current_breed["CodGruppo"]
+        storeed_breed.group_description = current_breed["DesGruppo"]
     return breeder
 
 def get_breeders(area:Area) -> list[Breeder]:
@@ -217,7 +218,7 @@ if __name__ == "__main__":
     db: Database = Database()
     areas: list[Area] = get_areas()
     pool: Pool = Pool(os.cpu_count())
-    pooled_areas = pool.starmap(scrape_area, [(area,) for area in areas])
+    pooled_areas: list[Area] = pool.starmap(scrape_area, [(area,) for area in areas])
     x: dict = {}
     for area in pooled_areas:
         for breeder in area.breeders:
@@ -239,7 +240,7 @@ if __name__ == "__main__":
     print("Starting to add all breeders details to breeders.")
     for area in pooled_areas:
         for breeder in area.breeders:
-            if breeder.id in finalised_breeders:
+            if breeder.id in finalised_breeders.keys():
                 breeder = finalised_breeders[breeder.id]
     print("All breeders details added to breeders.")
     print(f"{completed_processes.value} breeders completed / {total_breeder_count} breeders total.")
