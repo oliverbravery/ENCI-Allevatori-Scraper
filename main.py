@@ -24,17 +24,17 @@ def add_to_database(db: Database, areas: list[Area], breeders: list[Breeder], me
     db.connection.commit()
     return True
 
-def pooled_breeder_retrieval(areas: list[Area]) -> list[Breeder]:
+def pooled_breeder_retrieval(areas: list[Area], manager: Manager) -> list[Breeder]:
     pool: Pool = Pool(os.cpu_count())
-    breeders: list[Breeder] = pool.starmap(scrape_area, [(area,) for area in areas])
+    progress: Progress = Progress(start_time=time.time(), 
+                                  total_amount=len(areas), 
+                                  manager=manager)
+    breeders: list[Breeder] = pool.starmap(scrape_area, [(area,progress,) for area in areas])
     breeders: list[Breeder] = [breeder for breeder_list in breeders for breeder in breeder_list]
     return breeders
     
-def pooled_breed_members_retrieval(breeders: list[Breeder]) -> list[BreedMembers]:
+def pooled_breed_members_retrieval(breeders: list[Breeder], manager: Manager) -> list[BreedMembers]:
     total_breeder_count = len(breeders)
-    # create a manager to instantiate semaphore objects for progress tracking across processes
-    manager: Manager = Manager()
-    completed_processes = Counter(manager,0)
     paused_process_count = Counter(manager,0)
     pool: Pool = Pool(os.cpu_count())
     progress: Progress = Progress(start_time=time.time(), total_amount=total_breeder_count, manager=manager)
@@ -64,24 +64,32 @@ def sort_breed_members(breed_members: list[BreedMembers]) -> (list[Member], list
     return (members, breeds)
 
 if __name__ == "__main__":
-    # create a database object
+    # instantiates a database object
     db: Database = Database()
+    # instantiate a Manager object to create a semaphores for progress tracking across processes
+    manager: Manager = Manager()
+    # Centered title with 50-character width
+    print("_" * 50)
+    print("\n" + f"{'Allevatori Scraper v1.0.0':^50}")
+    print("_" * 50)
     # get all areas
     areas: list[Area] = get_areas()
     # get all breeders using multiprocessing
-    breeders: list[Breeder] = pooled_breeder_retrieval(areas)
-    print("All breeders scraped.")
-    print(f"Starting to retrieve breeder details for {len(breeders)} breeders.")
+    print("\nStarting to retrieve all breeders.")
+    breeders: list[Breeder] = pooled_breeder_retrieval(areas, manager)
+    print("\nAll breeders scraped.")
+    print(f"\nStarting to retrieve breeder details for {len(breeders)} breeders.")
     # get all breeders' members and breeds using multiprocessing
-    breed_members: list[BreedMembers] = pooled_breed_members_retrieval(breeders)
+    breed_members: list[BreedMembers] = pooled_breed_members_retrieval(breeders, manager)
     members: list[Member] = None
     breeds: list[Breed] = None
     # sort breed_members of type BreedMembers into lists of members and breeds
     members, breeds = sort_breed_members(breed_members)
-    print("All breeders details retrieved.")
-    print("Starting to add all breeders to database.")
+    print("\nAll breeders details retrieved.")
+    print("\nStarting to add all breeders to database.")
     # add all data to a relational database
     add_to_database(db, areas, breeders, members, breeds)
-    print("All breeders added to database.")
+    print("\nAll breeders added to database.")
+    print("\nProgram complete.")
 
     

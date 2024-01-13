@@ -74,6 +74,7 @@ class Area:
     def __init__(self, title, region):
         self.title = title
         self.region = region
+        self.breeders = []
     def __str__(self):
         return f"({self.region}){self.title}"
     def __repr__(self):

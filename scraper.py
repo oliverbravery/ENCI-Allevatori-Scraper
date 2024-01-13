@@ -64,12 +64,12 @@ def get_breeders(area:Area) -> list[Breeder]:
                                    breeds=[breed_code for breed_code in current_breeder["Razze"]])
         if breeder not in breeders:
             breeders.append(breeder)
-            print(f"\t-Breeder ({breeder.id}){breeder.title} added.")
     return breeders
 
-def scrape_area(area: Area) -> list[Breeder]:
+def scrape_area(area: Area, progress: Progress) -> list[Breeder]:
     breeders: list[Breeder] = get_breeders(area)
-    print(f"Area ({area.region}){area.title} scraped.")
+    progress.increment_amount_completed()
+    progress.display_progress()
     return breeders
 
 def request_breeder_details(breeder: Breeder, paused_process_count: Counter, wait_time: float, progress: Progress) -> BreedMembers:
