@@ -1,4 +1,7 @@
 class Breed:
+    """
+    Represents a breed of dog.
+    """
     code: str
     id: str
     last_litter: str
@@ -18,6 +21,9 @@ class Breed:
         return Breed.__str__(self)
     
 class Member:
+    """
+    Represents a member of ENCI.
+    """
     description: str
     id: str
     signatory: bool
@@ -42,6 +48,9 @@ class Member:
     
 
 class Breeder:
+    """
+    Represents a breeder of dogs.
+    """
     title: str
     owner: str
     id: str
@@ -68,6 +77,9 @@ class Breeder:
         return int(obj.id)
 
 class Area:
+    """
+    Represents an area of Italy.
+    """
     title: str
     region: str
     breeders: list[Breeder]
@@ -85,6 +97,9 @@ class Area:
         return self.title == o.title and self.region == o.region
     
 class BreedMembers:
+    """
+    Represents the members and breeds of a breeder.
+    """
     breeds: list[Breed]
     members: list[Member]
     def __init__(self, breeds: list[Breed] = [], members: list[Member] = []):
