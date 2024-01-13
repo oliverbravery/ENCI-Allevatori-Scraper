@@ -109,7 +109,7 @@ if __name__ == "__main__":
     print("\nStarting to add all breeders to database.")
     # add all data to a relational database
     database_integration(areas, breeders, members, breeds, manager)
-    print("\nAll breeders added to database.")
-    print("\nProgram complete.")
+    print("\nAll information added to the database.")
+    print("\nProgram complete. Exiting.")
 
     
