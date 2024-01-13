@@ -5,24 +5,46 @@ from models import *
 from database import Database
 from scraper import *
 
-def add_to_database(db: Database, areas: list[Area], breeders: list[Breeder], members: list[Member], breeds: list[Breed]) -> bool:
+def database_integration(areas: list[Area], breeders: list[Breeder], 
+                         members: list[Member], breeds: list[Breed], 
+                         manager: Manager) -> None:
+    # instantiates a database object
+    db: Database = Database()
+    total_database_entries: int = len(areas)+len(breeders)+len(members)+len(breeds)+len(breeders)+len(
+        [breed for breeder in breeders for breed in breeder.breeds]
+        )+len([member for member in members for breeder_id in member.breeder_ids])
+    progress: Progress = Progress(start_time=time.time(), 
+                                  total_amount=total_database_entries, 
+                                  manager=manager)
+    add_to_database(db, areas, breeders, members, breeds, progress)
+    
+def add_to_database(db: Database, areas: list[Area], breeders: list[Breeder], members: list[Member], breeds: list[Breed], progress: Progress) -> bool:
     for area in areas:
-        db.cursor.execute("INSERT OR IGNORE INTO areas VALUES (?,?)", (area.title, area.region))
+        db.query_no_response(query="INSERT OR IGNORE INTO areas VALUES (?,?)", 
+                             params=(area.title, area.region), progress=progress)
     for breeder in breeders:
-        db.cursor.execute("INSERT OR IGNORE INTO breeders VALUES (?,?,?)", (breeder.title, breeder.owner, breeder.id))
+        db.query_no_response(query="INSERT OR IGNORE INTO breeders VALUES (?,?,?)", 
+                             params=(breeder.title, breeder.owner, breeder.id), progress=progress)
     for breed in breeds:
-        db.cursor.execute("INSERT OR IGNORE INTO breeds VALUES (?,?,?,?,?,?)", (breed.code, breed.id, breed.last_litter, breed.description, breed.group_code, breed.group_description))
+        db.query_no_response(query="INSERT OR IGNORE INTO breeds VALUES (?,?,?,?,?,?)", 
+                             params=(breed.code, breed.id, breed.last_litter, breed.description, 
+                                     breed.group_code, breed.group_description), 
+                             progress=progress)
     for member in members:
-        db.cursor.execute("INSERT OR IGNORE INTO members VALUES (?,?,?,?,?)", (member.description, member.id, member.signatory, member.address, member.town))
+        db.query_no_response(query="INSERT OR IGNORE INTO members VALUES (?,?,?,?,?)", 
+                             params=(member.description, member.id, member.signatory, member.address, member.town), 
+                             progress=progress)
     for breeder in breeders:
-        db.cursor.execute("INSERT OR IGNORE INTO areas_breeders VALUES (?,?)", (breeder.area_region, breeder.id))
+        db.query_no_response(query="INSERT OR IGNORE INTO areas_breeders VALUES (?,?)", 
+                             params=(breeder.area_region, breeder.id), progress=progress)
         for breed_code in breeder.breeds:
-            db.cursor.execute("INSERT OR IGNORE INTO breeders_breeds VALUES (?,?)", (breeder.id, breed_code))
+            db.query_no_response(query="INSERT OR IGNORE INTO breeders_breeds VALUES (?,?)", 
+                                 params=(breeder.id, breed_code), progress=progress)
     for member in members:
         for breeder_id in member.breeder_ids:
-            db.cursor.execute("INSERT OR IGNORE INTO breeders_members VALUES (?,?)", (breeder_id, member.id))
-    db.connection.commit()
-    return True
+            db.query_no_response(query="INSERT OR IGNORE INTO breeders_members VALUES (?,?)", 
+                                 params=(breeder_id, member.id), progress=progress)
+    db.commit_to_database()
 
 def pooled_breeder_retrieval(areas: list[Area], manager: Manager) -> list[Breeder]:
     pool: Pool = Pool(os.cpu_count())
@@ -64,8 +86,6 @@ def sort_breed_members(breed_members: list[BreedMembers]) -> (list[Member], list
     return (members, breeds)
 
 if __name__ == "__main__":
-    # instantiates a database object
-    db: Database = Database()
     # instantiate a Manager object to create a semaphores for progress tracking across processes
     manager: Manager = Manager()
     # Centered title with 50-character width
@@ -88,7 +108,7 @@ if __name__ == "__main__":
     print("\nAll breeders details retrieved.")
     print("\nStarting to add all breeders to database.")
     # add all data to a relational database
-    add_to_database(db, areas, breeders, members, breeds)
+    database_integration(areas, breeders, members, breeds, manager)
     print("\nAll breeders added to database.")
     print("\nProgram complete.")
 

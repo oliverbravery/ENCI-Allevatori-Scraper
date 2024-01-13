@@ -1,4 +1,5 @@
 import sqlite3
+from Progress import *
 
 class Database:
     connection: sqlite3.Connection
@@ -15,4 +16,13 @@ class Database:
         self.cursor.execute("CREATE TABLE IF NOT EXISTS breeders_breeds (breeder_id TEXT, breed_code TEXT, FOREIGN KEY(breeder_id) REFERENCES breeders(id), FOREIGN KEY(breed_code) REFERENCES breeds(code), PRIMARY KEY(breeder_id, breed_code))")
         self.cursor.execute("CREATE TABLE IF NOT EXISTS breeders_members (breeder_id TEXT, member_id TEXT, FOREIGN KEY(breeder_id) REFERENCES breeders(id), FOREIGN KEY(member_id) REFERENCES members(id), PRIMARY KEY(breeder_id, member_id))")
         self.cursor.execute("CREATE TABLE IF NOT EXISTS areas_breeders (area_region TEXT, breeder_id TEXT, FOREIGN KEY(area_region) REFERENCES areas(region), FOREIGN KEY(breeder_id) REFERENCES breeders(id), PRIMARY KEY(area_region, breeder_id))")
+        self.connection.commit()
+        
+    def query_no_response(self, query: str, params:tuple, progress: Progress = None) -> None:
+        self.cursor.execute(query, params)
+        if progress:
+            progress.increment_amount_completed()
+            progress.display_progress()
+    
+    def commit_to_database(self):
         self.connection.commit()
