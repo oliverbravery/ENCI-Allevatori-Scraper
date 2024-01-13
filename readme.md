@@ -4,7 +4,7 @@
 This project scrapes the Italian ENCI website utilising multiple processes to gather information about dog breeds, breeders, members, and areas of Italy. The scraped data is stored in a MySQL database locally.
 
 ## Installation
-1. Clone the repository: `git clone https://github.com/oliverbravery/allevatori.git`
+1. Clone the repository: `git clone https://github.com/oliverbravery/ENCI-Allevatori-Scraper.git`
 2. Install the required dependencies: `pip install -r requirements.txt`
 
 ## Usage
