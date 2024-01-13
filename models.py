@@ -1,20 +1,3 @@
-from multiprocessing import Manager
-from ctypes import c_int
-
-class Counter(object):
-    def __init__(self, manager: Manager, initval=0):
-        self.val = manager.Value(c_int, initval)
-        self.lock = manager.Lock()
-    def increment(self):
-        with self.lock:
-            self.val.value += 1
-    def decrement(self):
-        with self.lock:
-            self.val.value -= 1
-    @property
-    def value(self):
-        return self.val.value
-    
 class Breed:
     code: str
     id: str

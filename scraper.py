@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 import json
 import time
 import numpy as np
-import sys
+from Progress import *
 
 def get_areas() -> list[Area]:
     URL = f"https://www.enci.it/allevatori/allevatori-con-affisso?codRegione=PIE"
@@ -72,17 +72,7 @@ def scrape_area(area: Area) -> list[Breeder]:
     print(f"Area ({area.region}){area.title} scraped.")
     return breeders
 
-def display_progress(start_time: float, percentage_complete: float, 
-                     completed_breeders: int, total_breeders: int):
-    sec = time.time()-start_time
-    title = f'{completed_breeders}/{total_breeders} - ({percentage_complete}% {sec//60:02.0f}:{sec%60:02.0f}) '
-    bar_width = 20
-    full_width = int(bar_width*percentage_complete/100.0)
-    empty_width = bar_width - full_width
-    sys.stdout.write('\r'+'['+full_width*'#'+empty_width*'.'+'] '+title)
-    sys.stdout.flush()
-
-def request_breeder_details(breeder: Breeder, total_breeders: int, completed_breeders: Counter, paused_process_count: Counter, wait_time: float, start_time: float) -> BreedMembers:
+def request_breeder_details(breeder: Breeder, paused_process_count: Counter, wait_time: float, progress: Progress) -> BreedMembers:
     time.sleep(wait_time)
     breed_members: BreedMembers = None
     completed: bool = False
@@ -97,8 +87,6 @@ def request_breeder_details(breeder: Breeder, total_breeders: int, completed_bre
             paused_process_count.increment()
             time.sleep(np.random.uniform(7.3,11.48))
             paused_process_count.decrement()
-    completed_breeders.increment()
-    percentage = round((float(completed_breeders.value)/float(total_breeders))*100.0, 1)
-    display_progress(start_time=start_time,percentage_complete=percentage, 
-                     completed_breeders=completed_breeders.value, total_breeders=total_breeders)
+    progress.increment_amount_completed()
+    progress.display_progress()
     return breed_members

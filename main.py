@@ -37,9 +37,12 @@ def pooled_breed_members_retrieval(breeders: list[Breeder]) -> list[BreedMembers
     completed_processes = Counter(manager,0)
     paused_process_count = Counter(manager,0)
     pool: Pool = Pool(os.cpu_count())
-    start_time: float = time.time()
+    progress: Progress = Progress(start_time=time.time(), total_amount=total_breeder_count, manager=manager)
     # use starmap to pass multiple arguments to the function
-    pooled_breed_members: list[BreedMembers] = pool.starmap(request_breeder_details, [(breeder, total_breeder_count, completed_processes, paused_process_count,np.random.uniform(0.03,0.43), start_time) for breeder in breeders])
+    pooled_breed_members: list[BreedMembers] = pool.starmap(request_breeder_details, 
+                                                            [(breeder, 
+                                                              paused_process_count,np.random.uniform(0.03,0.43), progress) 
+                                                             for breeder in breeders])
     return pooled_breed_members
     
 def sort_breed_members(breed_members: list[BreedMembers]) -> (list[Member], list[Breed]):
