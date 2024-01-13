@@ -217,6 +217,7 @@ def request_breeder_details(breeder: Breeder, total_breeders: int, completed_bre
 if __name__ == "__main__":
     db: Database = Database()
     areas: list[Area] = get_areas()
+    areas: list[Area] = [areas[0]] #limiting for database testing
     pool: Pool = Pool(os.cpu_count())
     pooled_areas: list[Area] = pool.starmap(scrape_area, [(area,) for area in areas])
     x: dict = {}
@@ -232,16 +233,16 @@ if __name__ == "__main__":
     completed_processes = Counter(manager,0)
     paused_process_count = Counter(manager,0)
     pool: Pool = Pool(os.cpu_count())
-    pooled_breeders = pool.starmap(request_breeder_details, [(breeder, total_breeder_count, completed_processes, paused_process_count,np.random.uniform(0.03,0.43)) for breeder in all_breeders])
+    pooled_breeders: list[Breeder] = pool.starmap(request_breeder_details, [(breeder, total_breeder_count, completed_processes, paused_process_count,np.random.uniform(0.03,0.43)) for breeder in all_breeders])
     print("All breeders details retrieved.")
     finalised_breeders: dict = {}
     for breeder in pooled_breeders:
-        finalised_breeders[breeder.id] = breeder
+        finalised_breeders[breeder.id]: Breeder = breeder
     print("Starting to add all breeders details to breeders.")
     for area in pooled_areas:
         for breeder in area.breeders:
             if breeder.id in finalised_breeders.keys():
-                breeder = finalised_breeders[breeder.id]
+                breeder: Breeder = finalised_breeders[breeder.id]
     print("All breeders details added to breeders.")
     print(f"{completed_processes.value} breeders completed / {total_breeder_count} breeders total.")
     print("Starting to add all breeders to database.")
