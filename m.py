@@ -54,6 +54,7 @@ class Member:
         self.signatory = signatory
         self.address = address
         self.town = town
+        self.breeder_ids = breeder_ids
     def __str__(self):
         return f"{self.description}-{self.id}-{self.signatory}-{self.address}-{self.town}"
     def __repr__(self):
@@ -192,7 +193,23 @@ def get_breeders(area:Area) -> list[Breeder]:
     return breeders
 
 def add_to_database(db: Database, areas: list[Area], breeders: list[Breeder], members: list[Member], breeds: list[Breed]) -> bool:
-    pass
+    for area in areas:
+        db.cursor.execute("INSERT OR IGNORE INTO areas VALUES (?,?)", (area.title, area.region))
+    for breeder in breeders:
+        db.cursor.execute("INSERT OR IGNORE INTO breeders VALUES (?,?,?)", (breeder.title, breeder.owner, breeder.id))
+    for breed in breeds:
+        db.cursor.execute("INSERT OR IGNORE INTO breeds VALUES (?,?,?,?,?,?)", (breed.code, breed.id, breed.last_litter, breed.description, breed.group_code, breed.group_description))
+    for member in members:
+        db.cursor.execute("INSERT OR IGNORE INTO members VALUES (?,?,?,?,?)", (member.description, member.id, member.signatory, member.address, member.town))
+    for breeder in breeders:
+        db.cursor.execute("INSERT OR IGNORE INTO areas_breeders VALUES (?,?)", (breeder.area_region, breeder.id))
+        for breed_code in breeder.breeds:
+            db.cursor.execute("INSERT OR IGNORE INTO breeders_breeds VALUES (?,?)", (breeder.id, breed_code))
+    for member in members:
+        for breeder_id in member.breeder_ids:
+            db.cursor.execute("INSERT OR IGNORE INTO breeders_members VALUES (?,?)", (breeder_id, member.id))
+    db.connection.commit()
+    return True
 
 def scrape_area(area: Area) -> list[Breeder]:
     breeders: list[Breeder] = get_breeders(area)
@@ -222,10 +239,9 @@ def request_breeder_details(breeder: Breeder, total_breeders: int, completed_bre
 if __name__ == "__main__":
     db: Database = Database()
     areas: list[Area] = get_areas()
-    areas: list[Area] = [areas[0]] #limiting for database testing
     pool: Pool = Pool(os.cpu_count())
     breeders: list[Breeder] = pool.starmap(scrape_area, [(area,) for area in areas])
-    breeders.sort(key=Breeder.get_key)
+    breeders: list[Breeder] = [breeder for breeder_list in breeders for breeder in breeder_list]
     print("All breeders scraped.")
     print(f"Starting to retrieve breeder details for {len(breeders)} breeders.")
     total_breeder_count = len(breeders)
@@ -233,10 +249,10 @@ if __name__ == "__main__":
     completed_processes = Counter(manager,0)
     paused_process_count = Counter(manager,0)
     pool: Pool = Pool(os.cpu_count())
-    pooled_breed_members: list[BreedMembers] = pool.starmap(request_breeder_details, [(breeder, total_breeder_count, completed_processes, paused_process_count,np.random.uniform(0.03,0.43)) for breeder in all_breeders])
+    pooled_breed_members: list[BreedMembers] = pool.starmap(request_breeder_details, [(breeder, total_breeder_count, completed_processes, paused_process_count,np.random.uniform(0.03,0.43)) for breeder in breeders])
     print("All breeders details retrieved.")
-    members: dict[str, Member] = []
-    breeds: list[str, Breed] = []
+    members: dict[str, Member] = {}
+    breeds: list[str, Breed] = {}
     for breed_members in pooled_breed_members:
         for member in breed_members.members:
             if member.id not in members:
